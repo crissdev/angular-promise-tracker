@@ -1,130 +1,172 @@
-angular.module('ajoslin.promise-tracker', [])
+/*
+ * promise-tracker - v2.1.0 - 2014-11-15
+ * http://github.com/ajoslin/angular-promise-tracker
+ * Created by Andy Joslin; Licensed under Public Domain
+ */
+(function (angular) {
+  'use strict';
 
-.provider('promiseTracker', function() {
-  var trackers = {};
-
-  this.$get = ['$q', '$timeout', function($q, $timeout) {
-    function cancelTimeout(promise) {
-      if (promise) {
-        $timeout.cancel(promise);
-      }
-    }
-
-    return function PromiseTracker(options) {
-      options = options || {};
-
-      //Array of promises being tracked
-      var tracked = [];
-      var self = {};
-
-      //Allow an optional "minimum duration" that the tracker has to stay active for.
-      var minDuration = options.minDuration;
-      //Allow a delay that will stop the tracker from activating until that time is reached
-      var activationDelay = options.activationDelay;
-
-      var minDurationPromise;
-      var activationDelayPromise;
-
-      self.active = function() {
-        //Even if we have a promise in our tracker, we aren't active until delay is elapsed
-        if (activationDelayPromise) {
-          return false;
-        }
-        return tracked.length > 0;
-      };
-
-      self.tracking = function() {
-        //Even if we aren't active, we could still have a promise in our tracker
-        return tracked.length > 0;
-      };
-
-      self.trackingCount = function() {
-        return tracked.length;
-      };
-
-      self.destroy = self.cancel = function() {
-        minDurationPromise = cancelTimeout(minDurationPromise);
-        activationDelayPromise = cancelTimeout(activationDelayPromise);
-        for (var i=tracked.length-1; i>=0; i--) {
-          tracked[i].resolve();
-        }
-        tracked.length = 0;
-      };
-
-      //Create a promise that will make our tracker active until it is resolved.
-      // @return deferred - our deferred object that is being tracked
-      self.createPromise = function() {
-        var deferred = $q.defer();
-        tracked.push(deferred);
-
-        //If the tracker was just inactive and this the first in the list of
-        //promises, we reset our delay and minDuration
-        //again.
-        if (tracked.length === 1) {
-          if (activationDelay) {
-            activationDelayPromise = $timeout(function() {
-              activationDelayPromise = cancelTimeout(activationDelayPromise);
-              startMinDuration();
-            }, activationDelay);
-          } else {
-            startMinDuration();
+  angular.module('ajoslin.promise-tracker', [])
+    .provider('promiseTracker', function () {
+      this.$get = ['$q', '$timeout', function ($q, $timeout) {
+        function cancelTimeout(promise) {
+          if (promise) {
+            $timeout.cancel(promise);
           }
         }
 
-        deferred.promise.then(onDone(false), onDone(true));
+        return function PromiseTracker(options) {
+          options = options || {};
 
-        return deferred;
+          //Array of promises being tracked
+          var tracked = [];
+          var self = {};
 
-        function startMinDuration() {
-          if (minDuration) {
-            minDurationPromise = $timeout(angular.noop, minDuration);
-          }
-        }
+          //Allow an optional "minimum duration" that the tracker has to stay active for.
+          var minDuration = options.minDuration;
+          //Allow a delay that will stop the tracker from activating until that time is reached
+          var activationDelay = options.activationDelay;
 
-        //Create a callback for when this promise is done. It will remove our
-        //tracked promise from the array if once minDuration is complete
-        function onDone(isError) {
-          return function(value) {
-            (minDurationPromise || $q.when()).then(function() {
-              var index = tracked.indexOf(deferred);
-              tracked.splice(index, 1);
+          var minDurationPromise;
+          var activationDelayPromise;
 
-              //If this is the last promise, cleanup the timeouts
-              //for activationDelay
-              if (tracked.length === 0) {
-                activationDelayPromise = cancelTimeout(activationDelayPromise);
-              }
-            });
+          self.active = function () {
+            //Even if we have a promise in our tracker, we aren't active until delay is elapsed
+            if (activationDelayPromise) {
+              return false;
+            }
+            return tracked.length > 0;
           };
-        }
-      };
 
-      self.addPromise = function(promise) {
-        if (Array.isArray(promise)) {
-          return $q.all(promise.map(self.addPromise));
-        }
+          self.tracking = function () {
+            //Even if we aren't active, we could still have a promise in our tracker
+            return tracked.length > 0;
+          };
 
-        promise = promise && (promise.$promise || promise) || {};
-        if (!promise.then) {
-          throw new Error("promiseTracker#addPromise expects a promise object!");
-        }
+          self.trackingCount = function () {
+            return tracked.length;
+          };
 
-        var deferred = self.createPromise();
+          self.destroy = self.cancel = function () {
+            minDurationPromise = cancelTimeout(minDurationPromise);
+            activationDelayPromise = cancelTimeout(activationDelayPromise);
+            for (var i = tracked.length - 1; i >= 0; i--) {
+              tracked[i].resolve();
+            }
+            tracked.length = 0;
+          };
 
-        //When given promise is done, resolve our created promise
-        //Allow $then for angular-resource objects
-        promise.then(function success(value) {
-          deferred.resolve(value);
-          return value;
-        }, function error(value) {
-          deferred.reject(value);
-          return $q.reject(value);
-        });
+          //Create a promise that will make our tracker active until it is resolved.
+          // @return deferred - our deferred object that is being tracked
+          self.createPromise = function () {
+            var deferred = $q.defer();
+            tracked.push(deferred);
 
-        return deferred;
-      };
+            //If the tracker was just inactive and this the first in the list of
+            //promises, we reset our delay and minDuration
+            //again.
+            if (tracked.length === 1) {
+              if (activationDelay) {
+                activationDelayPromise = $timeout(function () {
+                  activationDelayPromise = cancelTimeout(activationDelayPromise);
+                  startMinDuration();
+                }, activationDelay);
+              } else {
+                startMinDuration();
+              }
+            }
 
-      return self;
-    };
-  }];
-});
+            deferred.promise.then(onDone(false), onDone(true));
+
+            return deferred;
+
+            function startMinDuration() {
+              if (minDuration) {
+                minDurationPromise = $timeout(angular.noop, minDuration);
+              }
+            }
+
+            //Create a callback for when this promise is done. It will remove our
+            //tracked promise from the array if once minDuration is complete
+            function onDone(isError) {
+              return function (value) {
+                (minDurationPromise || $q.when()).then(function () {
+                  var index = tracked.indexOf(deferred);
+                  tracked.splice(index, 1);
+
+                  //If this is the last promise, cleanup the timeouts
+                  //for activationDelay
+                  if (tracked.length === 0) {
+                    activationDelayPromise = cancelTimeout(activationDelayPromise);
+                  }
+                });
+              };
+            }
+          };
+
+          self.addPromise = function (promise) {
+            if (Array.isArray(promise)) {
+              return $q.all(promise.map(self.addPromise));
+            }
+
+            promise = promise && (promise.$promise || promise) || {};
+            if (!promise.then) {
+              throw new Error("promiseTracker#addPromise expects a promise object!");
+            }
+
+            var deferred = self.createPromise();
+
+            //When given promise is done, resolve our created promise
+            //Allow $then for angular-resource objects
+            promise.then(function success(value) {
+              deferred.resolve(value);
+              return value;
+            }, function error(value) {
+              deferred.reject(value);
+              return $q.reject(value);
+            });
+
+            return deferred;
+          };
+
+          return self;
+        };
+      }];
+    })
+    .config(['$httpProvider', function ($httpProvider) {
+      $httpProvider.interceptors.push(['$q', 'promiseTracker', function ($q, promiseTracker) {
+        return {
+          request: function (config) {
+            if (config.tracker) {
+              if (!angular.isArray(config.tracker)) {
+                config.tracker = [config.tracker];
+              }
+              config.$promiseTrackerDeferred = config.$promiseTrackerDeferred || [];
+
+              angular.forEach(config.tracker, function (tracker) {
+                var deferred = tracker.createPromise();
+                config.$promiseTrackerDeferred.push(deferred);
+              });
+            }
+            return $q.when(config);
+          },
+          response: function (response) {
+            if (response.config && response.config.$promiseTrackerDeferred) {
+              angular.forEach(response.config.$promiseTrackerDeferred, function (deferred) {
+                deferred.resolve(response);
+              });
+            }
+            return $q.when(response);
+          },
+          responseError: function (response) {
+            if (response.config && response.config.$promiseTrackerDeferred) {
+              angular.forEach(response.config.$promiseTrackerDeferred, function (deferred) {
+                deferred.reject(response);
+              });
+            }
+            return $q.reject(response);
+          }
+        };
+      }]);
+    }]);
+})(angular);
